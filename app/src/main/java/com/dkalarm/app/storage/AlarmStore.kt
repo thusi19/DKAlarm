@@ -22,7 +22,7 @@ class AlarmStore(context: Context) {
     fun markScreenshotSeen(hash: String) {
         val current = prefs.getStringSet("seen_screenshots", emptySet()).orEmpty().toMutableSet()
         current += hash
-        prefs.edit().putStringSet("seen_screenshots", current.takeLast(100).toSet()).apply()
+        prefs.edit().putStringSet("seen_screenshots", current.toList().takeLast(100).toSet()).apply()
     }
 
     fun hasAlarm(key: String): Boolean = all().any { it.key == key }
