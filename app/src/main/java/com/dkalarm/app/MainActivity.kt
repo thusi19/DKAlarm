@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
@@ -138,7 +141,7 @@ class DKAlarmViewModel(private val activity: MainActivity) : ViewModel() {
     private val reviewStore = ReviewStore(activity)
     private val settings = SettingsStore(activity)
 
-    var uiState by androidx.compose.runtime.mutableStateOf(
+    var uiState by mutableStateOf(
         DKAlarmUiState(leadSeconds = settings.leadSeconds, attacks = reviewStore.load(), pendingReviewCount = reviewStore.load().size)
     )
         private set
