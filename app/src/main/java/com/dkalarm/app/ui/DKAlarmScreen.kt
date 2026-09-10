@@ -1,218 +1,172 @@
 package com.dkalarm.app.ui
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.dkalarm.app.DKAlarmUiState
-import com.dkalarm.app.model.AttackColor
-import com.dkalarm.app.model.CrownState
-import com.dkalarm.app.model.EditableAttack
-import com.dkalarm.app.model.ValidationState
-import java.time.*
+import com.dkalarm.app.DKAlarmViewModel
+import com.dkalarm.app.core.Rules
+import com.dkalarm.app.model.*
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
 
 @Composable
-fun DKAlarmScreen(
-    state: DKAlarmUiState,
-    onPick: () -> Unit,
-    onStartQuickScan: () -> Unit,
-    onStopQuickScan: () -> Unit,
-    onLeadChanged: (Int) -> Unit,
-    onEdit: (Int, EditableAttack) -> Unit,
-    onSchedule: () -> Unit,
-    onRequestExactPermission: () -> Unit,
-    onClearMessage: () -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+fun DKAlarmScreen(vm:DKAlarmViewModel,onPick:()->Unit,onExact:()->Unit,onNotifications:()->Unit,onNotificationSettings:()->Unit) {
+    var tab by remember {mutableStateOf(0)}
+    var confirmClear by remember {mutableStateOf(false)}
+    val preview=vm.plannedPreview()
+    val enabled=vm.scheduler.enabledIdentities(vm.stored)
+    LazyColumn(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal=16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item {
-            Text("DK Alarm V2", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Rychlý režim: otevři příchozí útoky v DK a klepni na plovoucí SCAN.")
-            Spacer(Modifier.height(10.dp))
-
-            if (!state.quickScanActive) {
-                Button(onClick = onStartQuickScan, enabled = !state.analyzing, modifier = Modifier.fillMaxWidth()) {
-                    Text("Zapnout rychlý SCAN")
-                }
-                Text("Android se zeptá na plovoucí tlačítko a sdílení obrazovky. Skenování probíhá jen po klepnutí na SCAN.", style = MaterialTheme.typography.bodySmall)
-            } else {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text("✓ Rychlý SCAN aktivní", fontWeight = FontWeight.Bold)
-                        Text("Přejdi do DK → Příchozí → klepni na plovoucí SCAN.")
-                        Spacer(Modifier.height(6.dp))
-                        OutlinedButton(onClick = onStopQuickScan) { Text("Ukončit rychlý SCAN") }
-                    }
-                }
-            }
-
             Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = onPick, enabled = !state.analyzing) { Text("Nebo vybrat screenshot ručně") }
-            if (state.analyzing) {
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text("Analyzuji lokálně…")
+            Text("DK Alarm",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
+            Text("Útoky ze screenshotu • alarm 1 minutu před dopadem",style=MaterialTheme.typography.bodyMedium)
+            Text("Časy hry: Praha",style=MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                FilterChip(tab==0,{tab=0},{Text("Import")})
+                FilterChip(tab==1,{tab=1},{Text("Alarmy (${vm.stored.count {!it.fired&&it.attack.alarmTime!!.isAfter(Instant.now())}})")})
             }
         }
-
-        if (state.pendingReviewCount > 0) {
-            item {
-                AssistChip(onClick = {}, label = { Text("${state.pendingReviewCount}× potřebuje kontrolu") })
+        item {
+            if(!vm.exact||!vm.notifications)Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("Dokonči nastavení",fontWeight=FontWeight.Bold)
+                    if(!vm.notifications) {
+                        Button(onNotifications){Text("Povolit oznámení")}
+                        TextButton(onNotificationSettings){Text("Otevřít nastavení oznámení")}
+                    }
+                    if(!vm.exact)Button(onExact){Text("Povolit přesné alarmy")}
+                }
             }
         }
-
-        state.message?.let { message ->
+        if(vm.message.isNotBlank())item {Text(vm.message,color=MaterialTheme.colorScheme.primary)}
+        if(tab==0) {
             item {
+                var dateText by remember(vm.screenshotDate){mutableStateOf(vm.screenshotDate.toString())}
+                Text("Datum pořízení screenshotu",fontWeight=FontWeight.SemiBold)
+                Text("Podle něj se přepočítá „dnes“ a „zítra“. Starší obrázek potřebuje původní datum.",style=MaterialTheme.typography.bodySmall)
+                OutlinedTextField(dateText,{dateText=it},label={Text("RRRR-MM-DD")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                val date=runCatching {LocalDate.parse(dateText)}.getOrNull()
+                if(date!=null&&date!=vm.screenshotDate)OutlinedButton({vm.setDate(date)},enabled=!vm.busy){Text("Použít datum a přepočítat")}
+                Button(onPick,enabled=!vm.busy&&date==vm.screenshotDate,modifier=Modifier.fillMaxWidth()){Text("Vybrat screenshot")}
+                if(vm.busy){LinearProgressIndicator(Modifier.fillMaxWidth());Text(vm.progress)}
+            }
+            if(vm.attacks.isNotEmpty())item {
+                Button({vm.save()},enabled=!vm.busy,modifier=Modifier.fillMaxWidth()){Text("Aktivovat potvrzené alarmy")}
+                Text("Nejisté řádky se neaktivují. Minutové série: 1., 3., 5. alarm, samostatně pro každou vesnici.",style=MaterialTheme.typography.bodySmall)
+            }
+            items(vm.attacks,key={it.id}) {attack->
+                ReviewCard(attack,attack.identity in preview,vm)
+            }
+        } else {
+            item {
+                OutlinedButton({vm.testAlarm()}){Text("Vyzkoušet zvuk a oznámení")}
+                Text("Zvuk se ztiší tlačítkem v oznámení nebo za 60 sekund. Zkontroluj hlasitost budíku.",style=MaterialTheme.typography.bodySmall)
+                if(vm.stored.isNotEmpty())TextButton({confirmClear=true}){Text("Zrušit všechny alarmy")}
+                if(vm.stored.isEmpty())Text("Zatím tu nejsou uložené alarmy.")
+            }
+            items(vm.stored.sortedBy {it.attack.arrivalTime},key={it.attack.identity}) {entry->
                 Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(message)
-                        if (state.exactPermissionMissing) {
-                            Spacer(Modifier.height(8.dp))
-                            Button(onClick = onRequestExactPermission) { Text("Povolit přesné alarmy") }
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        TextButton(onClick = onClearMessage) { Text("Skrýt") }
+                    Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                        val a=entry.attack
+                        Text(a.villageName,fontWeight=FontWeight.Bold)
+                        Text(a.label)
+                        Text("Příchod: ${DATE_FORMAT.format(a.arrivalTime!!)}")
+                        Text(when {
+                            entry.fired -> "Alarm již zazněl"
+                            a.alarmTime!!.isBefore(Instant.now()) -> "Čas alarmu uplynul"
+                            a.identity !in enabled -> "Vynechán v minutové sérii"
+                            !vm.exact||!vm.notifications -> "ČEKÁ NA OPRÁVNĚNÍ"
+                            else -> "Alarm: ${TIME_FORMAT.format(a.alarmTime!!)}"
+                        })
+                        TextButton({vm.cancel(a.identity)}){Text("Odstranit")}
                     }
                 }
             }
         }
-
-        if (state.attacks.isNotEmpty()) {
-            item {
-                Text("Předstih alarmu", fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(30,45,60,90,120).forEach { seconds ->
-                        FilterChip(
-                            selected = state.leadSeconds == seconds,
-                            onClick = { onLeadChanged(seconds) },
-                            label = { Text("$seconds s") }
-                        )
-                    }
-                }
-                var custom by remember(state.leadSeconds) { mutableStateOf(state.leadSeconds.toString()) }
-                OutlinedTextField(
-                    value = custom,
-                    onValueChange = { value ->
-                        custom = value.filter(Char::isDigit).take(4)
-                        custom.toIntOrNull()?.let(onLeadChanged)
-                    },
-                    label = { Text("Vlastní předstih (s)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
-        itemsIndexed(state.attacks, key = { _, it -> it.id }) { index, attack ->
-            AttackReviewCard(index, attack, onEdit)
-        }
-
-        if (state.attacks.isNotEmpty()) {
-            item {
-                HorizontalDivider()
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = onSchedule, modifier = Modifier.fillMaxWidth()) {
-                    Text("Potvrdit kontrolované řádky a vytvořit alarmy")
-                }
-                Text(
-                    "Jistá korunka má vždy přednost před barvou. Nejasná korunka nebo čas se nikdy automaticky nepotvrdí.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
+        item {Spacer(Modifier.height(24.dp))}
     }
+    if(confirmClear)AlertDialog(onDismissRequest={confirmClear=false},title={Text("Zrušit všechny alarmy?")},
+        text={Text("Odstraní se i uložené minutové série.")},confirmButton={TextButton({vm.clearAll();confirmClear=false}){Text("Zrušit alarmy")}},
+        dismissButton={TextButton({confirmClear=false}){Text("Zpět")}})
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AttackReviewCard(index: Int, attack: EditableAttack, onEdit: (Int, EditableAttack) -> Unit) {
+private fun ReviewCard(a:Attack,enabled:Boolean,vm:DKAlarmViewModel) {
+    var expanded by remember(a.id){mutableStateOf(false)}
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val headline = when (attack.crown) {
-                CrownState.YES -> "👑 ŠLECHTA"
-                CrownState.MAYBE -> "⚠️ MOŽNÁ ŠLECHTA – ZKONTROLOVAT"
-                CrownState.NO -> when (attack.color) {
-                    AttackColor.RED -> "🔴 ČERVENÝ"
-                    AttackColor.BROWN -> "🟤 HNĚDÝ"
-                    AttackColor.GREEN -> "🟢 ZELENÝ"
-                    else -> "ÚTOK"
-                }
+        Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                Text(a.villageName,Modifier.weight(1f),fontWeight=FontWeight.Bold,style=MaterialTheme.typography.titleMedium)
+                Checkbox(a.selected,{vm.edit(a.id,a.copy(selected=it))})
             }
-            Text(headline, fontWeight = FontWeight.Bold)
-
-            OutlinedTextField(
-                value = attack.targetVillage,
-                onValueChange = { onEdit(index, attack.copy(targetVillage = it)) },
-                label = { Text("Cílová vesnice") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            var arrivalText by remember(attack.id, attack.arrivalText) { mutableStateOf(attack.arrivalText) }
-            OutlinedTextField(
-                value = arrivalText,
-                onValueChange = { txt ->
-                    arrivalText = txt
-                    val parsed = parseArrival(txt)
-                    onEdit(index, attack.copy(arrivalText = txt, arrivalInstant = parsed, validation = if (parsed != null) ValidationState.OK else ValidationState.CHECK_TIME))
-                },
-                label = { Text("Příchod (HH:mm:ss nebo dd.MM.yyyy HH:mm:ss)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Text("Korunka – rozhodující znak", fontWeight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                CrownState.entries.forEach { state ->
-                    FilterChip(
-                        selected = attack.crown == state,
-                        onClick = { onEdit(index, attack.copy(crown = state)) },
-                        label = { Text(when(state) { CrownState.YES -> "ANO"; CrownState.MAYBE -> "NEJISTÁ"; CrownState.NO -> "NE" }) }
-                    )
+            Text(if(a.nobleState==Rules.Noble.MAYBE)"JEDNOTKA NEJISTÁ / ZKONTROLOVAT • ${Rules.label(false,a.attackColor)}" else a.label,fontWeight=FontWeight.SemiBold)
+            Text("Příchod: ${a.arrivalTime?.let(TIME_FORMAT::format) ?: "NEROZPOZNÁN"}")
+            if(a.arrivalTime!=null)Text("Datum: ${a.arrivalTime.atZone(GAME_ZONE).toLocalDate()}",style=MaterialTheme.typography.bodySmall)
+            Text(when {
+                !a.selected -> "Nezařazen"
+                !a.reviewed -> "Alarm čeká na kontrolu"
+                !a.important -> "Běžný zelený útok – bez alarmu"
+                a.alarmTime==null -> "Alarm: neplatný čas"
+                !a.alarmTime!!.isAfter(Instant.now()) -> "Čas alarmu už uplynul"
+                !enabled -> "Alarm: vynechán v minutové sérii"
+                else -> "Alarm: ${TIME_FORMAT.format(a.alarmTime!!)}"
+            })
+            TextButton({expanded=!expanded}){Text(if(expanded)"Skrýt kontrolu" else "Zkontrolovat / upravit")}
+            if(expanded) {
+                val source=vm.bitmap
+                if(source!=null&&a.rowBottom>a.rowTop) {
+                    val crop=remember(source,a.id){android.graphics.Bitmap.createBitmap(source,0,a.rowTop,source.width,a.rowBottom-a.rowTop)}
+                    Text("Původní řádek – posuň do strany pro zvětšené čtení",style=MaterialTheme.typography.bodySmall)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                        Image(crop.asImageBitmap(),"Původní řádek útoku",Modifier.width(1400.dp).height(96.dp))
+                    }
                 }
-            }
-
-            Text("Barva")
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(AttackColor.GREEN, AttackColor.RED, AttackColor.BROWN, AttackColor.UNKNOWN).forEach { color ->
-                    FilterChip(
-                        selected = attack.color == color,
-                        onClick = { onEdit(index, attack.copy(color = color)) },
-                        label = { Text(color.name) }
-                    )
+                Text("Přečtená jednotka: ${a.rawCommand}",style=MaterialTheme.typography.bodySmall)
+                Text("Přečtený příchod: ${a.rawArrival}",style=MaterialTheme.typography.bodySmall)
+                if(a.warning.isNotBlank())Text(a.warning,color=MaterialTheme.colorScheme.error)
+                OutlinedTextField(a.villageName,{vm.edit(a.id,a.copy(villageName=it,reviewed=false))},label={Text("Název cílové vesnice")},modifier=Modifier.fillMaxWidth())
+                OutlinedTextField(a.coordinates,{vm.edit(a.id,a.copy(coordinates=it,reviewed=false))},label={Text("Souřadnice pro rozlišení vesnic")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                var text by remember(a.id){mutableStateOf(a.arrivalTime?.let(DATE_FORMAT::format).orEmpty())}
+                OutlinedTextField(text,{value->
+                    text=value
+                    val time=runCatching {
+                        LocalDateTime.parse(value,DateTimeFormatter.ofPattern("dd.MM.uuuu HH:mm:ss").withResolverStyle(ResolverStyle.STRICT)).let { local ->
+                            require(GAME_ZONE.rules.getValidOffsets(local).size==1);local.atZone(GAME_ZONE).toInstant()
+                        }
+                    }.getOrNull()
+                    vm.edit(a.id,a.copy(arrivalTime=time,reviewed=false))
+                },label={Text("Příchod: dd.MM.rrrr HH:mm:ss")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                Text("Je v povelu text Šlechta?",fontWeight=FontWeight.SemiBold)
+                FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                    Rules.Noble.values().forEach { state -> FilterChip(a.nobleState==state,
+                        {vm.edit(a.id,a.copy(nobleState=state,isNoble=state==Rules.Noble.YES,reviewed=false))},
+                        {Text(when(state){Rules.Noble.YES->"Ano";Rules.Noble.NO->"Ne";else->"Nejisté"})}) }
                 }
+                Text("Barva útoku")
+                FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                    Rules.Color.values().forEach {color->FilterChip(a.attackColor==color,
+                        {vm.edit(a.id,a.copy(attackColor=color,reviewed=false))},
+                        {Text(when(color){Rules.Color.GREEN->"Zelená";Rules.Color.RED->"Červená";Rules.Color.BROWN->"Hnědá";else->"Nejistá"})})}
+                }
+                Button({vm.edit(a.id,a.copy(reviewed=true,warning=""))},
+                    enabled=a.arrivalTime!=null&&a.villageName.isNotBlank()&&a.nobleState!=Rules.Noble.MAYBE&&
+                        (a.coordinates.isBlank()||Regex("\\d{3}\\|\\d{3}").matches(a.coordinates))&&
+                        (a.attackColor!=Rules.Color.UNKNOWN||a.isNoble)) {Text("Potvrzuji údaje tohoto řádku")}
+                Text("Korunka sama Šlechtu nepotvrzuje.",style=MaterialTheme.typography.bodySmall)
             }
-
-            if (attack.validation != ValidationState.OK) Text("⚠️ ČAS ZKONTROLOVAT", fontWeight = FontWeight.Bold)
-            else Text("✓ čas potvrzen / opraven")
-            attack.warnings.distinct().forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
         }
     }
-}
-
-private fun parseArrival(text: String): Instant? {
-    val zone = ZoneId.systemDefault()
-    val cleaned = text.trim()
-    val dtFormats = listOf("d.M.yyyy H:mm:ss", "dd.MM.yyyy HH:mm:ss")
-    for (pattern in dtFormats) {
-        runCatching { LocalDateTime.parse(cleaned, DateTimeFormatter.ofPattern(pattern)).atZone(zone).toInstant() }.getOrNull()?.let { return it }
-    }
-    val timeFormats = listOf("H:mm:ss", "HH:mm:ss")
-    for (pattern in timeFormats) {
-        val t = runCatching { LocalTime.parse(cleaned, DateTimeFormatter.ofPattern(pattern)) }.getOrNull() ?: continue
-        var date = LocalDate.now(zone)
-        var instant = date.atTime(t).atZone(zone).toInstant()
-        if (instant.isBefore(Instant.now().minusSeconds(120))) {
-            date = date.plusDays(1)
-            instant = date.atTime(t).atZone(zone).toInstant()
-        }
-        return instant
-    }
-    return null
 }

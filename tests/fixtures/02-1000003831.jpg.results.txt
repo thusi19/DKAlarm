@@ -1,0 +1,14 @@
+159 | NO | |) §@ Beranidlo # | vesnice Darbarul | 952|421 | Zitfa V 14°33°42781) | null
+180 | NO | | KB Beranidio 4 | Vesnice barbarus | 564|403 | zitra v 14:33:43:34 | 2026-09-11T12:33:43Z
+213 | NO | 2) 00 Beranidio A | Vodka Club | 554|417 | —_zitra vv 14:33:57:262 | 2026-09-11T12:33:57Z
+245 | NO | ) $708 Beranidio A | drhouse vesnice 101 | 565|410 | zitra v 14:34:03: | 2026-09-11T12:34:03Z
+278 | NO | ) $708 Beranidio A | 931/ |  | zitra v 14:34:40:054 | 2026-09-11T12:34:40Z
+310 | NO | (|) <e Beranidlo “| | Vesnice barbaru | 548|419 | zitra v 14:35:18: | 2026-09-11T12:35:18Z
+343 | YES | () $0 BW Slechta A | KaStan004D | 559|424 | zitra v 14:35:55:3: | 2026-09-11T12:35:55Z
+375 | MAYBE | | $8 BM Siechta A | KaStan004D | 559|424 | zitra v 14:35:56:03: | 2026-09-11T12:35:56Z
+408 | YES | [) $0 BW Slechta A | KaStan004D | 559|424 | zitra v 14:35:56:202 | 2026-09-11T12:35:56Z
+440 | YES | | $M Slechta A | ‘KaStan004D | 559|424 | Zitra V 14:35:56: | 2026-09-11T12:35:56Z
+473 | NO | | | ow Beranidlo #| | 907 unadrzené sousedky | 556|415 | Zitra V 14:36:51:6: | 2026-09-11T12:36:51Z
+505 | NO | fe Cw Beranidlo /| | Vesnice barbaru1 | 552|421 | zitra v 14:37:00:202 | 2026-09-11T12:37:00Z
+538 | NO | | | $B Beranidio 4 | 904 | Radek dvandctka | 557|414 | zitra v 14:38:00:28¢ | 2026-09-11T12:38:00Z
+569 | NO | | $08 Beranidio 4 | KaStan003 | 557|421 | zitra v 14:39:48: | 2026-09-11T12:39:48Z

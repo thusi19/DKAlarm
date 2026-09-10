@@ -1,7 +1,12 @@
+*.iml
 .gradle/
 .gradle-bootstrap/
-.idea/
+.android-sdk/
+.android-tools-tmp/
 local.properties
-/build/
-app/build/
-*.iml
+**/build/
+*.apk
+*.jks
+*.keystore
+.idea/
+tests/ocr-cache/

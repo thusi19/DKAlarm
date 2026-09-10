@@ -1,48 +1,41 @@
 package com.dkalarm.app.model
 
-import android.graphics.Rect
+import com.dkalarm.app.core.Rules
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
-enum class AttackColor { GREEN, RED, BROWN, BLUE, GRAY, UNKNOWN }
-enum class CrownState { YES, MAYBE, NO }
-enum class AttackKind { NOBLE, POSSIBLE_NOBLE, RED_ATTACK, BROWN_ATTACK, OTHER }
-enum class ValidationState { OK, CHECK_TIME, INVALID }
+val GAME_ZONE: ZoneId = ZoneId.of("Europe/Prague")
+val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(GAME_ZONE)
+val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(GAME_ZONE)
 
-data class OcrField(
-    val text: String = "",
-    val confidence: Float = 0f,
-    val bounds: Rect? = null
-)
-
-data class AttackCandidate(
+data class Attack(
     val id: String,
-    val rowBounds: Rect,
-    val targetVillage: OcrField,
-    val absoluteArrivalText: OcrField,
-    val relativeArrivalText: OcrField,
-    val arrivalInstant: Instant?,
-    val color: AttackColor,
-    val colorConfidence: Float,
-    val crown: CrownState,
-    val crownScore: Float,
-    val kind: AttackKind,
-    val validation: ValidationState,
-    val warnings: List<String> = emptyList(),
-    val sourceScreenshotHash: String
+    val villageName: String,
+    val coordinates: String,
+    val arrivalTime: Instant?,
+    val isNoble: Boolean,
+    val nobleState: Rules.Noble,
+    val attackColor: Rules.Color,
+    val warning: String = "",
+    val reviewed: Boolean = false,
+    val selected: Boolean = true,
+    val rawCommand: String = "",
+    val rawArrival: String = "",
+    val sourceHash: String = "",
+    val rowTop: Int = 0,
+    val rowBottom: Int = 0
 ) {
-    val needsReview: Boolean
-        get() = crown == CrownState.MAYBE || validation != ValidationState.OK ||
-            targetVillage.confidence < 0.65f || absoluteArrivalText.confidence < 0.65f
+    val label: String get() = Rules.label(isNoble, attackColor)
+    val important: Boolean get() = Rules.important(isNoble, attackColor)
+    val villageKey: String get() = Rules.villageKey(villageName, coordinates)
+    val alarmTime: Instant? get() = arrivalTime?.minusSeconds(60)
+    val identity: String get() = "$villageKey|${arrivalTime?.epochSecond}|$isNoble|${attackColor.name}"
 }
 
-data class EditableAttack(
-    val id: String,
-    val targetVillage: String,
-    val arrivalText: String,
-    val arrivalInstant: Instant?,
-    val color: AttackColor,
-    val crown: CrownState,
-    val validation: ValidationState,
-    val warnings: List<String>,
-    val sourceScreenshotHash: String
-)
+data class StoredAttack(val attack: Attack, val fired: Boolean = false)
+data class AlarmSlot(val key: String, val trigger: Instant, val attacks: List<Attack>) {
+    val noble: Boolean get() = attacks.any { it.isNoble }
+    val title: String get() = attacks.map { "${it.label} – ${it.villageName}" }.distinct().joinToString("; ")
+    val arrival: String get() = attacks.first().arrivalTime?.let(TIME_FORMAT::format).orEmpty()
+}
