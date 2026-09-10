@@ -18,34 +18,50 @@ data class ParsedTime(
 )
 
 class TimeValidator(private val zoneId: ZoneId = ZoneId.systemDefault()) {
-    private val hms = Regex("(?<!\\d)([0-2]?\\d):([0-5]\\d):([0-5]\\d)(?!\\d)")
+    private val absoluteHms = Regex("(?<!\\d)([01]?\\d|2[0-3]):([0-5]\\d):([0-5]\\d)(?!\\d)")
+    // DK "Dorazí za" can be longer than 24 hours, e.g. 40:12:03.
+    private val durationHms = Regex("(?<!\\d)(\\d{1,3}):([0-5]\\d):([0-5]\\d)(?!\\d)")
     private val date = Regex("(?<!\\d)([0-3]?\\d)[.\\-/]([01]?\\d)(?:[.\\-/](20\\d{2}))?")
 
     fun parse(absoluteText: String, relativeText: String, capturedAt: Instant): ParsedTime {
         val warnings = mutableListOf<String>()
-        val absHms = hms.find(absoluteText)
-        val relHms = hms.find(relativeText)
-        val relDuration = relHms?.let {
-            val (h,m,s) = it.destructured
-            Duration.ofSeconds(h.toLong()*3600 + m.toLong()*60 + s.toLong())
+        val absMatch = absoluteHms.find(absoluteText)
+        val relMatch = durationHms.find(relativeText)
+        val relDuration = relMatch?.let {
+            val (h, m, s) = it.destructured
+            Duration.ofSeconds(h.toLong() * 3600 + m.toLong() * 60 + s.toLong())
         }
         val expected = relDuration?.let { capturedAt.plus(it) }
 
-        var absConfidence = if (absHms != null) 0.92f else 0f
-        val relConfidence = if (relHms != null) 0.92f else 0f
-        val absolute = absHms?.let {
-            val (h,m,s) = it.destructured
-            val lt = LocalTime.of(h.toInt().coerceAtMost(23), m.toInt(), s.toInt())
+        var absConfidence = if (absMatch != null) 0.94f else 0f
+        val relConfidence = if (relMatch != null) 0.94f else 0f
+
+        val absolute = absMatch?.let {
+            val (h, m, s) = it.destructured
+            val time = LocalTime.of(h.toInt(), m.toInt(), s.toInt())
             val explicitDate = date.find(absoluteText)?.let { d ->
                 val (dd, mm, yyyy) = d.destructured
-                LocalDate.of(if (yyyy.isBlank()) LocalDate.now(zoneId).year else yyyy.toInt(), mm.toInt(), dd.toInt())
+                val year = if (yyyy.isBlank()) capturedAt.atZone(zoneId).year else yyyy.toInt()
+                runCatching { LocalDate.of(year, mm.toInt(), dd.toInt()) }.getOrNull()
             }
-            val baseDate = explicitDate ?: capturedAt.atZone(zoneId).toLocalDate()
-            val candidates = listOf(baseDate.minusDays(1), baseDate, baseDate.plusDays(1)).map {
-                LocalDateTime.of(it, lt).atZone(zoneId).toInstant()
+
+            val baseDate = explicitDate
+                ?: expected?.atZone(zoneId)?.toLocalDate()
+                ?: capturedAt.atZone(zoneId).toLocalDate()
+
+            val candidates = if (explicitDate != null) {
+                listOf(LocalDateTime.of(baseDate, time).atZone(zoneId).toInstant())
+            } else {
+                listOf(baseDate.minusDays(1), baseDate, baseDate.plusDays(1)).map { day ->
+                    LocalDateTime.of(day, time).atZone(zoneId).toInstant()
+                }
             }
-            if (expected != null) candidates.minBy { c -> abs(Duration.between(c, expected).seconds) }
-            else candidates.filter { !it.isBefore(capturedAt.minusSeconds(120)) }.minOrNull() ?: candidates[1]
+
+            if (expected != null) {
+                candidates.minBy { candidate -> abs(Duration.between(candidate, expected).seconds) }
+            } else {
+                candidates.filter { !it.isBefore(capturedAt.minusSeconds(120)) }.minOrNull() ?: candidates[1.coerceAtMost(candidates.lastIndex)]
+            }
         }
 
         if (absolute == null) warnings += "Nepodařilo se spolehlivě přečíst absolutní čas Příchod."
@@ -54,7 +70,7 @@ class TimeValidator(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         var state = if (absolute != null) ValidationState.OK else ValidationState.INVALID
         if (absolute != null && expected != null) {
             val delta = abs(Duration.between(absolute, expected).seconds)
-            if (delta > 8) {
+            if (delta > 10) {
                 warnings += "Příchod a Dorazí za si odporují o přibližně ${delta} s."
                 state = ValidationState.CHECK_TIME
                 absConfidence = 0.55f
@@ -64,6 +80,7 @@ class TimeValidator(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             state = ValidationState.CHECK_TIME
             absConfidence = minOf(absConfidence, 0.68f)
         }
+
         if (absolute != null && absolute.isBefore(capturedAt.minusSeconds(5))) {
             warnings += "Rozpoznaný čas dopadu je v minulosti."
             state = ValidationState.INVALID
