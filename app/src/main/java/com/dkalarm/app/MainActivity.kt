@@ -1,13 +1,16 @@
 package com.dkalarm.app
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -16,33 +19,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import com.dkalarm.app.analysis.AttackClassifier
-import com.dkalarm.app.analysis.ScreenshotAnalyzer
 import com.dkalarm.app.alarm.AlarmScheduler
 import com.dkalarm.app.alarm.ScheduleResult
+import com.dkalarm.app.analysis.ScreenshotAnalyzer
+import com.dkalarm.app.capture.QuickScanService
 import com.dkalarm.app.model.AttackCandidate
-import com.dkalarm.app.model.AttackColor
 import com.dkalarm.app.model.CrownState
 import com.dkalarm.app.model.EditableAttack
 import com.dkalarm.app.model.ValidationState
 import com.dkalarm.app.storage.AlarmStore
+import com.dkalarm.app.storage.ReviewStore
 import com.dkalarm.app.storage.SettingsStore
 import com.dkalarm.app.ui.DKAlarmScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
     private lateinit var vm: DKAlarmViewModel
@@ -58,21 +55,48 @@ class MainActivity : ComponentActivity() {
                     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                         if (uri != null) vm.analyzeUri(uri)
                     }
+                    val projectionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                        val data = result.data
+                        if (result.resultCode == Activity.RESULT_OK && data != null) {
+                            QuickScanService.start(this@MainActivity, result.resultCode, data)
+                            vm.setQuickScanActive(true)
+                        } else {
+                            vm.setMessage("Sdílení obrazovky nebylo povoleno. Rychlý SCAN se nespustil.")
+                        }
+                    }
+
                     DKAlarmScreen(
                         state = vm.uiState,
                         onPick = { picker.launch("image/*") },
+                        onStartQuickScan = {
+                            if (!Settings.canDrawOverlays(this@MainActivity)) {
+                                vm.setMessage("Nejdřív povol DK Alarmu zobrazit plovoucí tlačítko nad ostatními aplikacemi.")
+                                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                            } else {
+                                val manager = getSystemService(MediaProjectionManager::class.java)
+                                projectionLauncher.launch(manager.createScreenCaptureIntent())
+                            }
+                        },
+                        onStopQuickScan = {
+                            startService(Intent(this@MainActivity, QuickScanService::class.java).setAction(QuickScanService.ACTION_STOP))
+                            vm.setQuickScanActive(false)
+                        },
                         onLeadChanged = vm::setLeadSeconds,
                         onEdit = vm::editAttack,
                         onSchedule = vm::scheduleConfirmed,
                         onRequestExactPermission = { startActivity(vm.exactAlarmSettingsIntent()) },
                         onClearMessage = vm::clearMessage
                     )
-                    LaunchedEffect(Unit) {
-                        handleIntent(intent)
-                    }
+
+                    LaunchedEffect(Unit) { handleIntent(intent) }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::vm.isInitialized) vm.loadPendingReviews()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -102,17 +126,21 @@ data class DKAlarmUiState(
     val leadSeconds: Int = 60,
     val message: String? = null,
     val exactPermissionMissing: Boolean = false,
-    val screenshotDuplicate: Boolean = false
+    val screenshotDuplicate: Boolean = false,
+    val quickScanActive: Boolean = false,
+    val pendingReviewCount: Int = 0
 )
 
 class DKAlarmViewModel(private val activity: MainActivity) : ViewModel() {
     private val analyzer = ScreenshotAnalyzer()
     private val scheduler = AlarmScheduler(activity)
     private val alarmStore = AlarmStore(activity)
+    private val reviewStore = ReviewStore(activity)
     private val settings = SettingsStore(activity)
-    private val classifier = AttackClassifier()
 
-    var uiState by mutableStateOf(DKAlarmUiState(leadSeconds = settings.leadSeconds))
+    var uiState by androidx.compose.runtime.mutableStateOf(
+        DKAlarmUiState(leadSeconds = settings.leadSeconds, attacks = reviewStore.load(), pendingReviewCount = reviewStore.load().size)
+    )
         private set
 
     fun analyzeUri(uri: Uri) {
@@ -121,11 +149,13 @@ class DKAlarmViewModel(private val activity: MainActivity) : ViewModel() {
             try {
                 val bitmap = withContext(Dispatchers.IO) { decodeBitmap(uri) }
                 val candidates = analyzer.analyze(bitmap, Instant.now())
+                bitmap.recycle()
                 val editable = candidates.map { it.toEditable() }
                 val duplicate = candidates.firstOrNull()?.sourceScreenshotHash?.let(alarmStore::isScreenshotSeen) == true
                 uiState = uiState.copy(
                     analyzing = false,
                     attacks = editable,
+                    pendingReviewCount = editable.count { it.crown == CrownState.MAYBE || it.validation != ValidationState.OK },
                     screenshotDuplicate = duplicate,
                     message = when {
                         editable.isEmpty() -> "Na screenshotu jsem nenašel žádný spolehlivě oddělený řádek s časem."
@@ -139,6 +169,22 @@ class DKAlarmViewModel(private val activity: MainActivity) : ViewModel() {
         }
     }
 
+    fun loadPendingReviews() {
+        val pending = reviewStore.load()
+        if (pending.isNotEmpty()) {
+            uiState = uiState.copy(
+                attacks = pending,
+                pendingReviewCount = pending.size,
+                message = "Rychlý SCAN našel ${pending.size} řádků, které potřebují kontrolu."
+            )
+        } else {
+            uiState = uiState.copy(pendingReviewCount = 0)
+        }
+    }
+
+    fun setQuickScanActive(value: Boolean) { uiState = uiState.copy(quickScanActive = value) }
+    fun setMessage(value: String) { uiState = uiState.copy(message = value) }
+
     fun setLeadSeconds(value: Int) {
         settings.leadSeconds = value
         uiState = uiState.copy(leadSeconds = settings.leadSeconds)
@@ -148,7 +194,8 @@ class DKAlarmViewModel(private val activity: MainActivity) : ViewModel() {
         val list = uiState.attacks.toMutableList()
         if (index !in list.indices) return
         list[index] = edited
-        uiState = uiState.copy(attacks = list)
+        reviewStore.save(list)
+        uiState = uiState.copy(attacks = list, pendingReviewCount = list.count { it.crown == CrownState.MAYBE || it.validation != ValidationState.OK })
     }
 
     fun scheduleConfirmed() {
@@ -175,8 +222,11 @@ class DKAlarmViewModel(private val activity: MainActivity) : ViewModel() {
             }
         }
         uiState.attacks.firstOrNull()?.sourceScreenshotHash?.let(alarmStore::markScreenshotSeen)
+        reviewStore.clear()
         uiState = uiState.copy(
             exactPermissionMissing = false,
+            attacks = emptyList(),
+            pendingReviewCount = 0,
             message = "Alarmy: vytvořeno $scheduled, duplicitních $duplicates, bez alarmu $skipped."
         )
     }
@@ -200,26 +250,6 @@ class DKAlarmViewModel(private val activity: MainActivity) : ViewModel() {
         warnings = warnings,
         sourceScreenshotHash = sourceScreenshotHash
     )
-
-    fun parseEditedArrival(text: String): Instant? {
-        val cleaned = text.trim()
-        val formats = listOf("H:mm:ss", "HH:mm:ss", "d.M.yyyy H:mm:ss", "dd.MM.yyyy HH:mm:ss")
-        val zone = ZoneId.systemDefault()
-        formats.forEach { pattern ->
-            runCatching {
-                if (pattern.startsWith("H") || pattern.startsWith("HH")) {
-                    val time = java.time.LocalTime.parse(cleaned, DateTimeFormatter.ofPattern(pattern))
-                    val now = LocalDateTime.now(zone)
-                    var dt = now.toLocalDate().atTime(time)
-                    if (dt.atZone(zone).toInstant().isBefore(Instant.now().minusSeconds(120))) dt = dt.plusDays(1)
-                    return dt.atZone(zone).toInstant()
-                } else {
-                    return LocalDateTime.parse(cleaned, DateTimeFormatter.ofPattern(pattern)).atZone(zone).toInstant()
-                }
-            }
-        }
-        return null
-    }
 
     class Factory(private val activity: MainActivity) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
