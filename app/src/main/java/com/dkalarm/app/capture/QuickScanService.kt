@@ -93,14 +93,22 @@ class QuickScanService : Service() {
         }
 
         val projectionManager = getSystemService(MediaProjectionManager::class.java)
-        projection = projectionManager.getMediaProjection(resultCode, resultData).also { p ->
-            p.registerCallback(object : MediaProjection.Callback() {
-                override fun onStop() { cleanupProjection(); stopSelf() }
-            }, mainHandler)
-        }
+        val newProjection = projectionManager.getMediaProjection(resultCode, resultData)
+            ?: run {
+                updateForeground("Sdílení obrazovky se nepodařilo spustit.")
+                stopSelf()
+                return
+            }
+        projection = newProjection
+        newProjection.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() {
+                cleanupCaptureResources()
+                stopSelf()
+            }
+        }, mainHandler)
 
         imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3)
-        virtualDisplay = projection?.createVirtualDisplay(
+        virtualDisplay = newProjection.createVirtualDisplay(
             "DKAlarmQuickScan", width, height, densityDpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             imageReader?.surface, null, mainHandler
@@ -127,10 +135,14 @@ class QuickScanService : Service() {
                 try {
                     val candidates = analyzer.analyze(bitmap, Instant.now())
                     bitmap.recycle()
-                    processCandidates(candidates.map { c ->
-                        EditableAttack(c.id, c.targetVillage.text, c.absoluteArrivalText.text, c.arrivalInstant, c.color, c.crown, c.validation, c.warnings, c.sourceScreenshotHash)
-                    }, candidates.map { it.needsReview })
+                    processCandidates(
+                        candidates.map { c ->
+                            EditableAttack(c.id, c.targetVillage.text, c.absoluteArrivalText.text, c.arrivalInstant, c.color, c.crown, c.validation, c.warnings, c.sourceScreenshotHash)
+                        },
+                        candidates.map { it.needsReview }
+                    )
                 } catch (t: Throwable) {
+                    if (!bitmap.isRecycled) bitmap.recycle()
                     showResultNotification("Analýza selhala", t.message ?: t.javaClass.simpleName, true)
                 } finally {
                     scanning = false
@@ -246,10 +258,17 @@ class QuickScanService : Service() {
     }
 
     private fun showResultNotification(title: String, body: String, openApp: Boolean) {
-        val open = PendingIntent.getActivity(this, 12, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(
+            this, 12,
+            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val builder = NotificationCompat.Builder(this, CHANNEL_RESULTS)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(title).setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setAutoCancel(true)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
         if (openApp) builder.setContentIntent(open)
         getSystemService(NotificationManager::class.java).notify(RESULT_NOTIFICATION_ID, builder.build())
     }
@@ -260,17 +279,18 @@ class QuickScanService : Service() {
         nm.createNotificationChannel(NotificationChannel(CHANNEL_RESULTS, "Výsledky DK scanu", NotificationManager.IMPORTANCE_HIGH))
     }
 
-    private fun cleanupProjection() {
+    private fun cleanupCaptureResources() {
         overlayButton?.let { runCatching { windowManager.removeView(it) } }
         overlayButton = null
         virtualDisplay?.release(); virtualDisplay = null
         imageReader?.close(); imageReader = null
-        projection = null
     }
 
     override fun onDestroy() {
-        cleanupProjection()
-        runCatching { projection?.stop() }
+        val activeProjection = projection
+        projection = null
+        cleanupCaptureResources()
+        runCatching { activeProjection?.stop() }
         scope.cancel()
         super.onDestroy()
     }
@@ -294,8 +314,10 @@ class QuickScanService : Service() {
         private const val RESULT_NOTIFICATION_ID = 8811
 
         fun start(context: Context, resultCode: Int, data: Intent) {
-            val intent = Intent(context, QuickScanService::class.java).setAction(ACTION_START)
-                .putExtra(EXTRA_RESULT_CODE, resultCode).putExtra(EXTRA_RESULT_DATA, data)
+            val intent = Intent(context, QuickScanService::class.java)
+                .setAction(ACTION_START)
+                .putExtra(EXTRA_RESULT_CODE, resultCode)
+                .putExtra(EXTRA_RESULT_DATA, data)
             ContextCompat.startForegroundService(context, intent)
         }
     }
