@@ -1,29 +1,10 @@
 package com.dkalarm.app.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,17 +13,15 @@ import com.dkalarm.app.model.AttackColor
 import com.dkalarm.app.model.CrownState
 import com.dkalarm.app.model.EditableAttack
 import com.dkalarm.app.model.ValidationState
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.ZoneId
+import java.time.*
 import java.time.format.DateTimeFormatter
 
 @Composable
 fun DKAlarmScreen(
     state: DKAlarmUiState,
     onPick: () -> Unit,
+    onStartQuickScan: () -> Unit,
+    onStopQuickScan: () -> Unit,
     onLeadChanged: (Int) -> Unit,
     onEdit: (Int, EditableAttack) -> Unit,
     onSchedule: () -> Unit,
@@ -54,12 +33,38 @@ fun DKAlarmScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("DK Alarm", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Screenshot → kontrola → přesný alarm. Žádné přihlášení ani automatické čtení DK.")
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = onPick, enabled = !state.analyzing) { Text("Vybrat screenshot") }
+            Text("DK Alarm V2", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("Rychlý režim: otevři příchozí útoky v DK a klepni na plovoucí SCAN.")
+            Spacer(Modifier.height(10.dp))
+
+            if (!state.quickScanActive) {
+                Button(onClick = onStartQuickScan, enabled = !state.analyzing, modifier = Modifier.fillMaxWidth()) {
+                    Text("Zapnout rychlý SCAN")
+                }
+                Text("Android se zeptá na plovoucí tlačítko a sdílení obrazovky. Skenování probíhá jen po klepnutí na SCAN.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("✓ Rychlý SCAN aktivní", fontWeight = FontWeight.Bold)
+                        Text("Přejdi do DK → Příchozí → klepni na plovoucí SCAN.")
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedButton(onClick = onStopQuickScan) { Text("Ukončit rychlý SCAN") }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = onPick, enabled = !state.analyzing) { Text("Nebo vybrat screenshot ručně") }
             if (state.analyzing) {
-                Spacer(Modifier.height(8.dp)); LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Analyzuji lokálně…")
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text("Analyzuji lokálně…")
+            }
+        }
+
+        if (state.pendingReviewCount > 0) {
+            item {
+                AssistChip(onClick = {}, label = { Text("${state.pendingReviewCount}× potřebuje kontrolu") })
             }
         }
 
@@ -72,6 +77,8 @@ fun DKAlarmScreen(
                             Spacer(Modifier.height(8.dp))
                             Button(onClick = onRequestExactPermission) { Text("Povolit přesné alarmy") }
                         }
+                        Spacer(Modifier.height(4.dp))
+                        TextButton(onClick = onClearMessage) { Text("Skrýt") }
                     }
                 }
             }
@@ -112,10 +119,10 @@ fun DKAlarmScreen(
                 HorizontalDivider()
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = onSchedule, modifier = Modifier.fillMaxWidth()) {
-                    Text("Potvrdit a vytvořit alarmy")
+                    Text("Potvrdit kontrolované řádky a vytvořit alarmy")
                 }
                 Text(
-                    "Řádek s nejistou korunkou nebo časem se musí ručně vyřešit. Zelený útok bez korunky se podle zadání nealarmuje.",
+                    "Jistá korunka má vždy přednost před barvou. Nejasná korunka nebo čas se nikdy automaticky nepotvrdí.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -182,11 +189,8 @@ private fun AttackReviewCard(index: Int, attack: EditableAttack, onEdit: (Int, E
                 }
             }
 
-            if (attack.validation != ValidationState.OK) {
-                Text("⚠️ ČAS ZKONTROLOVAT", fontWeight = FontWeight.Bold)
-            } else {
-                Text("✓ čas potvrzen / opraven")
-            }
+            if (attack.validation != ValidationState.OK) Text("⚠️ ČAS ZKONTROLOVAT", fontWeight = FontWeight.Bold)
+            else Text("✓ čas potvrzen / opraven")
             attack.warnings.distinct().forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
         }
     }
@@ -205,7 +209,8 @@ private fun parseArrival(text: String): Instant? {
         var date = LocalDate.now(zone)
         var instant = date.atTime(t).atZone(zone).toInstant()
         if (instant.isBefore(Instant.now().minusSeconds(120))) {
-            date = date.plusDays(1); instant = date.atTime(t).atZone(zone).toInstant()
+            date = date.plusDays(1)
+            instant = date.atTime(t).atZone(zone).toInstant()
         }
         return instant
     }
