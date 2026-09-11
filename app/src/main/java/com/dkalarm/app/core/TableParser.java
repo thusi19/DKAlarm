@@ -24,8 +24,15 @@ public final class TableParser {
   r.commandText=join(words,g.left,g.targetStart);
   r.noble=Rules.noble(r.commandText);
   String target=join(words,g.targetStart,g.sourceStart);
-  // In a parenthesized coordinate pair OCR may merge the pipe with digits.
-  target=target.replaceAll("\\(([0-9]{3})1?([0-9]{3})\\)", "($1|$2)");
+  // Numeric coordinates have a fixed 3+3 format. Restrict glyph normalization to parentheses.
+  Matcher pair=Pattern.compile("\\(([0-9SOIlBso]{3})[\\s|/1,)]*([0-9SOIlBso]{3})\\)").matcher(target);
+  StringBuffer normalized=new StringBuffer();
+  while(pair.find()) {
+    String value="("+pair.group(1)+"|"+pair.group(2)+")";
+    value=value.replace('S','5').replace('s','5').replace('O','0').replace('o','0').replace('I','1').replace('l','1').replace('B','8');
+    pair.appendReplacement(normalized,Matcher.quoteReplacement(value));
+  }
+  pair.appendTail(normalized);target=normalized.toString();
   Matcher coord=COORD.matcher(target);
   if(coord.find()) {r.coordinates=coord.group(1)+"|"+coord.group(2);r.villageName=target.substring(0,coord.start()).trim();}
   else {r.villageName=target.replaceAll("\\s*\\(.*$","").replaceAll("\\s+K[0-9]{2}.*$","").trim();r.nameUncertain=true;}

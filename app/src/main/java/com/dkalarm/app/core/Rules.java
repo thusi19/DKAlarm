@@ -51,6 +51,7 @@ public final class Rules {
     public static final Pattern TIME = Pattern.compile("(?<![0-9:.,])([01]?[0-9]|2[0-3])[:.]([0-5][0-9])[:.]([0-5][0-9])");
     private static final Pattern DATE = Pattern.compile("(?<![0-9])([0-3]?[0-9])\\.\\s*([01]?[0-9])\\.(?:\\s*(20[0-9]{2}))?");
     public static String hms(String s) {
+        s=s.replaceAll("(?<![0-9:.])([01][0-9]|2[0-3])[:.]([0-5][0-9])([0-5][0-9])", "$1:$2:$3");
         Matcher m=TIME.matcher(s);
         if (!m.find()) return "";
         if (s.substring(0,m.start()).matches("(?s).*\\d\\s*$")) return "";

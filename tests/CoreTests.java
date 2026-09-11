@@ -18,6 +18,9 @@ public class CoreTests {
   eq(Rules.Noble.MAYBE,Rules.nobleEvidence("Sechta","Beranidlo"));
   eq(Rules.Noble.MAYBE,Rules.nobleEvidence("nešlechta","nešlechta"));
   eq(Rules.Noble.MAYBE,Rules.nobleEvidence("👑","👑"));
+  eq("14:35:55",Rules.hms("14:3555:850"));
+  eq("15:20:43",Rules.hms("15:2043.758"));
+  eq("",Rules.hms("29:3555"));
   LocalDate date=LocalDate.of(2026,9,10);ZoneId zone=ZoneId.of("Europe/Prague");
   eq(Instant.parse("2026-09-11T12:35:55Z"),Rules.arrival("zítra v 14:35:55:880",date,zone).instant);
   eq(Instant.parse("2026-09-10T12:35:55Z"),Rules.arrival("dnes v 14:35:55",date,zone).instant);
@@ -44,7 +47,7 @@ public class CoreTests {
   TableParser.Row row=new TableParser().parseRow(words,g,new TableGeometry.Band(0,20),date,zone);
   eq(Rules.Noble.NO,row.noble);eq("Kaštan013",row.villageName);eq("558|423",row.coordinates);eq("15:20:43",Rules.hms(row.arrivalText));
   eq(Instant.parse("2026-09-11T13:20:43Z"),row.arrival);
-  for(String c:List.of("(5591424)","(559424)","(559|/424)","(559,424)")) {
+  for(String c:List.of("(5591424)","(559424)","(559|/424)","(559,424)","(S59 424)")) {
     TableParser.Row cr=new TableParser().parseRow(Arrays.asList(w("Slechta",30,90),w("Kaštan004D "+c,110,280),w("dnes v 14:35:55",510,645)),g,new TableGeometry.Band(0,20),date,zone);
     eq("559|424",cr.coordinates);
   }
