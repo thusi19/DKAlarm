@@ -15,7 +15,7 @@ class ScreenshotAcceptanceTest {
         val bitmap=assets.open(name).use {BitmapFactory.decodeStream(it)}
         try {
             ScreenshotAnalyzer().analyze(bitmap,LocalDate.of(2026,9,day)).also { rows ->
-                rows.forEach { a -> android.util.Log.i("DK_OCR", "$name ROW ${a.rowTop}: ${a.rawCommand} | ${a.villageName} | ${a.coordinates} | ${a.rawArrival} | ${a.isNoble} | ${a.arrivalTime}") }
+                rows.forEach { a -> android.util.Log.i("DK_OCR", "$name ROW ${a.rowTop}: ${a.rawCommand} | ${a.villageName} | ${a.coordinates} | ${a.rawArrival} | ${a.isNoble} | ${a.arrivalTime} | ${a.attackColor}") }
                 println("$name rows=${rows.size} nobles=${rows.count {it.isNoble}}")
             }
         }
@@ -41,5 +41,34 @@ class ScreenshotAcceptanceTest {
         assertEquals(4,nobles.count {it.coordinates=="560|424"})
         assertEquals(4,nobles.count {it.coordinates=="559|424"})
         assertTrue(nobles.all {it.arrivalTime!=null})
+    }
+    @Test fun newPortraitTwelveNobles() {
+        val rows=analyze("new-02.png",11)
+        assertTrue(rows.size>=60)
+        assertEquals(12,rows.count {it.isNoble})
+        for(c in listOf("559|424","558|423","560|424")) assertEquals(c,4,rows.count {it.isNoble&&it.coordinates==c})
+        assertTrue(rows.filter {it.isNoble}.all {it.arrivalTime!=null})
+    }
+    @Test fun newThreeNoblesBothSizes() {
+        for(f in listOf("new-03.png","new-05.png")) {
+            val rows=analyze(f,11)
+            assertTrue(rows.size>=10)
+            val nobles=rows.filter {it.isNoble}
+            assertEquals(f,3,nobles.size)
+            assertTrue(nobles.all {it.coordinates=="555|417"})
+            assertTrue(nobles.all {it.arrivalTime!=null})
+        }
+    }
+    @Test fun newBrownAndNegatives() {
+        val none=analyze("new-01.png",11)
+        assertTrue(none.size>=10)
+        assertEquals(0,none.count {it.isNoble})
+        val rows=analyze("new-04.png",11)
+        assertEquals(0,rows.count {it.isNoble})
+        val brown=rows.filter {it.attackColor==com.dkalarm.app.core.Rules.Color.BROWN}
+        assertEquals(4,brown.size)
+        assertTrue(brown.all {it.coordinates=="557|414"})
+        assertTrue(brown.all {it.arrivalTime!=null})
+        assertEquals(3,rows.count {it.attackColor==com.dkalarm.app.core.Rules.Color.RED})
     }
 }

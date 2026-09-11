@@ -21,6 +21,17 @@ public final class Rules {
         }
         return knownOther ? Noble.NO : Noble.MAYBE;
     }
+    /** Only command-column text; fuzzy spelling requires a second OCR rendering. */
+    public static Noble nobleEvidence(String clean, String original) {
+        Noble direct=noble(clean);
+        if(direct!=Noble.MAYBE)return direct;
+        String other=normalize(original).replaceAll("[^a-z]", "");
+        for(String token:normalize(clean).split("[^a-z]+")) {
+            if((token.equals("sechta")||token.equals("siechta")||token.equals("s1echta")) &&
+               (other.endsWith(token)||other.endsWith(token+"a")||noble(original)==Noble.YES))return Noble.YES;
+        }
+        return Noble.MAYBE;
+    }
     private static int editDistance(String a, String b) {
         int[] p = new int[b.length()+1];
         for (int j=0;j<p.length;j++) p[j]=j;

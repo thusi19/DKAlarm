@@ -57,9 +57,11 @@ public final class TableGeometry {
     if(beige(c)&&Math.max(luma(a),luma(b))-luma(c)>4)n++;
    }scores[x]=(double)n/tableY.size();
   }
-  o.targetStart=o.border(scores,.09,.17);o.sourceStart=o.border(scores,.30,.42);
-  o.arrivalStart=o.border(scores,.72,.80);o.arrivalEnd=o.border(scores,.83,.90);
-  o.valid=scores[o.targetStart]>.10&&scores[o.sourceStart]>.10&&scores[o.arrivalStart]>.10&&scores[o.arrivalEnd]>.10;
+  o.targetStart=o.border(scores,.09,.17);o.sourceStart=o.border(scores,.30,.45);
+  boolean wideSource=(double)(o.sourceStart-o.left)/(o.right-o.left)>.395;
+  o.arrivalStart=wideSource?o.border(scores,.86,.90):o.border(scores,.72,.81);
+  o.arrivalEnd=wideSource?o.right:o.border(scores,.83,.91);
+  o.valid=scores[o.targetStart]>.10&&scores[o.sourceStart]>.10&&scores[o.arrivalStart]>.10&&(o.arrivalEnd==o.right||scores[o.arrivalEnd]>.10);
   return o;
  }
  private static double luma(int p){return (((p>>16)&255)+((p>>8)&255)+(p&255))/3.;}
