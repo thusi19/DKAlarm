@@ -3,12 +3,13 @@ on:
   workflow_dispatch:
   push:
     branches: [main, 'codex/text-ocr']
+    paths-ignore: ['**/*.md']
 permissions:
   contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -25,29 +26,60 @@ jobs:
         run: sh tests/run-core-tests.sh
       - name: Build app and device tests
         run: gradle --no-daemon assembleDebug assembleDebugAndroidTest
-      - name: Save APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: DKAlarm-text-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-apks
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: old-positive
+            count: 2
+            filter: com.dkalarm.app.ScreenshotAcceptanceTest#portraitPositiveTwelveNobles,com.dkalarm.app.ScreenshotAcceptanceTest#zoomedPositiveFourNobles
+          - name: old-negative-and-alarms
+            count: 2
+            filter: com.dkalarm.app.ScreenshotAcceptanceTest#negativeNoNobles,com.dkalarm.app.AlarmIntegrationTest
+          - name: new-positive
+            count: 2
+            filter: com.dkalarm.app.ScreenshotAcceptanceTest#newPortraitTwelveNobles,com.dkalarm.app.ScreenshotAcceptanceTest#newThreeNoblesBothSizes
+          - name: brown-and-negative
+            count: 1
+            filter: com.dkalarm.app.ScreenshotAcceptanceTest#newBrownAndNegatives
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: instrumented-apks
+          path: artifacts
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Test real bundled ML Kit
+      - name: Test bundled ML Kit and alarms
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          DK_TEST_FILTER: ${{ matrix.filter }}
+          DK_EXPECTED_TESTS: ${{ matrix.count }}
         with:
           api-level: 35
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: bash scripts/test-device.sh
-      - name: Save diagnostics
+          script: bash scripts/test-apks.sh
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: android-test-results
-          path: |
-            app/build/reports
-            app/build/outputs/androidTest-results
+          name: android-test-results-${{ matrix.name }}
+          path: reports

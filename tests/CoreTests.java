@@ -36,12 +36,18 @@ public class CoreTests {
   eq(Set.of("1","2","3"),Rules.enabled(Arrays.asList(e("1","v",100),e("2","v",154),e("3","v",220))));
   eq(Set.of("1","1b","3"),Rules.enabled(Arrays.asList(e("1","v",100),e("1b","v",100),e("2","v",160),e("3","v",220))));
   eq("558|423",Rules.villageKey("Kaštan013","558|423"));
+  eq(true,Rules.nobleCandidate("OsRsechta"));eq(false,Rules.nobleCandidate("Beranidlo"));
+  eq(false,Rules.nobleCandidate("neslechta"));eq(false,Rules.nobleCandidate("👑"));
   // Noble in SOURCE column must not classify an ordinary attack as noble.
   TableGeometry g=new TableGeometry();g.left=0;g.targetStart=100;g.sourceStart=300;g.arrivalStart=500;g.arrivalEnd=650;
   List<TableParser.Word> words=Arrays.asList(w("Beranidlo",30,90),w("Kaštan013",110,190),w("(558|423)",195,260),w("Šlechta",310,360),w("(421|550)",365,440),w("zítra v 15:20:43:880",510,645),w("22:00:00",660,700));
   TableParser.Row row=new TableParser().parseRow(words,g,new TableGeometry.Band(0,20),date,zone);
   eq(Rules.Noble.NO,row.noble);eq("Kaštan013",row.villageName);eq("558|423",row.coordinates);eq("15:20:43",Rules.hms(row.arrivalText));
   eq(Instant.parse("2026-09-11T13:20:43Z"),row.arrival);
+  for(String c:List.of("(5591424)","(559424)","(559|/424)","(559,424)")) {
+    TableParser.Row cr=new TableParser().parseRow(Arrays.asList(w("Slechta",30,90),w("Kaštan004D "+c,110,280),w("dnes v 14:35:55",510,645)),g,new TableGeometry.Band(0,20),date,zone);
+    eq("559|424",cr.coordinates);
+  }
   System.out.println("PASS: "+count+" assertions");
  }
  static TableParser.Word w(String text,int l,int r){return new TableParser.Word(text,l,5,r,15,.99f);}

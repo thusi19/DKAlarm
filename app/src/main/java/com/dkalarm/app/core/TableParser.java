@@ -14,7 +14,7 @@ public final class TableParser {
   public boolean nameUncertain;
   public int top,bottom,flagLeft,flagRight;
  }
- private static final Pattern COORD=Pattern.compile("\\(?([0-9]{3})\\s*[|Il/)]\\s*([0-9]{3})\\)?");
+ private static final Pattern COORD=Pattern.compile("\\(?([0-9]{3})\\s*[|Il/),]{1,2}\\s*([0-9]{3})\\)?");
  private static String join(List<Word> words,int start,int end){
   List<Word> inside=new ArrayList<>();for(Word w:words)if((w.left+w.right)/2>=start&&(w.left+w.right)/2<end)inside.add(w);
   inside.sort(Comparator.comparingInt(w->w.left));StringJoiner s=new StringJoiner(" ");for(Word w:inside)s.add(w.text);return s.toString();
@@ -24,6 +24,8 @@ public final class TableParser {
   r.commandText=join(words,g.left,g.targetStart);
   r.noble=Rules.noble(r.commandText);
   String target=join(words,g.targetStart,g.sourceStart);
+  // In a parenthesized coordinate pair OCR may merge the pipe with digits.
+  target=target.replaceAll("\\(([0-9]{3})1?([0-9]{3})\\)", "($1|$2)");
   Matcher coord=COORD.matcher(target);
   if(coord.find()) {r.coordinates=coord.group(1)+"|"+coord.group(2);r.villageName=target.substring(0,coord.start()).trim();}
   else {r.villageName=target.replaceAll("\\s*\\(.*$","").replaceAll("\\s+K[0-9]{2}.*$","").trim();r.nameUncertain=true;}

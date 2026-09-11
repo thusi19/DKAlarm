@@ -21,6 +21,11 @@ public final class Rules {
         }
         return knownOther ? Noble.NO : Noble.MAYBE;
     }
+    public static boolean nobleCandidate(String text) {
+        for(String token:normalize(text).split("[^a-z0-9]+"))
+            if(token.matches("[orsnfpu0]{0,4}(slechta|s?sechta|siechta)a?"))return true;
+        return false;
+    }
     /** Only command-column text; fuzzy spelling requires a second OCR rendering. */
     public static Noble nobleEvidence(String clean, String original) {
         Noble direct=noble(clean);
