@@ -43,7 +43,7 @@ public final class Rules {
         return p[b.length()];
     }
     // Consume a fractional suffix, but expose only whole seconds. No millisecond validation.
-    public static final Pattern TIME = Pattern.compile("(?<![0-9:.,])([01]?[0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])(?:[:.,][0-9]+)?(?![0-9])");
+    public static final Pattern TIME = Pattern.compile("(?<![0-9:.,])([01]?[0-9]|2[0-3])[:.]([0-5][0-9])[:.]([0-5][0-9])");
     private static final Pattern DATE = Pattern.compile("(?<![0-9])([0-3]?[0-9])\\.\\s*([01]?[0-9])\\.(?:\\s*(20[0-9]{2}))?");
     public static String hms(String s) {
         Matcher m=TIME.matcher(s);
@@ -58,11 +58,14 @@ public final class Rules {
     }
     public static Arrival arrival(String text, LocalDate screenshotDate, ZoneId zone) {
         try {
-            String time=hms(text);
+            int divider=normalize(text).lastIndexOf('v');
+            String clock=divider>=0?text.substring(divider+1):text;
+            String datePart=divider>=0?text.substring(0,divider):"";
+            String time=hms(clock);
             if(time.isEmpty()) return new Arrival(null,"Čas Příchod nerozpoznán.");
             String n=normalize(text);
             LocalDate date=screenshotDate;
-            Matcher dm=DATE.matcher(text);
+            Matcher dm=DATE.matcher(datePart);
             boolean explicit=false;
             if(dm.find()) {
                 date=LocalDate.of(dm.group(3)==null?screenshotDate.getYear():Integer.parseInt(dm.group(3)),Integer.parseInt(dm.group(2)),Integer.parseInt(dm.group(1)));

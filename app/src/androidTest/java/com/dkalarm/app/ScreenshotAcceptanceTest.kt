@@ -21,6 +21,9 @@ class ScreenshotAcceptanceTest {
         }
         finally {bitmap.recycle()}
     }
+    private fun nobleTimes(rows:List<com.dkalarm.app.model.Attack>) = rows.filter {it.isNoble}.map {
+        it.arrivalTime?.atZone(com.dkalarm.app.model.GAME_ZONE)?.toLocalTime()?.toString()
+    }
     @Test fun negativeNoNobles() {
         for(file in listOf("03-1000003625.png","04-1000003623.png")) {
             val rows=analyze(file,9)
@@ -31,12 +34,14 @@ class ScreenshotAcceptanceTest {
     @Test fun zoomedPositiveFourNobles() {
         val nobles=analyze("02-1000003831.png",10).filter {it.isNoble}
         assertEquals(4,nobles.size)
+        assertEquals(listOf("14:35:55","14:35:56","14:35:56","14:35:56"),nobleTimes(nobles))
         assertTrue(nobles.all {it.coordinates=="559|424"})
         assertTrue(nobles.all {it.arrivalTime!=null})
     }
     @Test fun portraitPositiveTwelveNobles() {
         val nobles=analyze("01-1000003833.png",10).filter {it.isNoble}
         assertEquals(12,nobles.size)
+        assertEquals(listOf("14:35:55","14:35:56","14:35:56","14:35:56","15:20:43","15:20:43","15:20:44","15:20:44","15:23:14","15:23:14","15:23:14","15:23:14"),nobleTimes(nobles))
         assertEquals(4,nobles.count {it.coordinates=="558|423"})
         assertEquals(4,nobles.count {it.coordinates=="560|424"})
         assertEquals(4,nobles.count {it.coordinates=="559|424"})
@@ -55,6 +60,7 @@ class ScreenshotAcceptanceTest {
             assertTrue(rows.size>=10)
             val nobles=rows.filter {it.isNoble}
             assertEquals(f,3,nobles.size)
+            assertEquals(listOf("11:59:31","11:59:31","11:59:32"),nobleTimes(nobles))
             assertTrue(nobles.all {it.coordinates=="555|417"})
             assertTrue(nobles.all {it.arrivalTime!=null})
         }
@@ -67,6 +73,7 @@ class ScreenshotAcceptanceTest {
         assertEquals(0,rows.count {it.isNoble})
         val brown=rows.filter {it.attackColor==com.dkalarm.app.core.Rules.Color.BROWN}
         assertEquals(4,brown.size)
+        assertTrue(brown.all {it.arrivalTime?.atZone(com.dkalarm.app.model.GAME_ZONE)?.toLocalTime()?.toString()=="11:21:22"})
         assertTrue(brown.all {it.coordinates=="557|414"})
         assertTrue(brown.all {it.arrivalTime!=null})
         assertEquals(3,rows.count {it.attackColor==com.dkalarm.app.core.Rules.Color.RED})

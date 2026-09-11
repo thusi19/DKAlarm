@@ -12,6 +12,12 @@ public class CoreTests {
   eq(Rules.Noble.MAYBE,Rules.noble(""));eq(Rules.Noble.NO,Rules.noble("Útok"));
   eq("14:35:55",Rules.hms("14:35:55:880"));eq("14:35:55",Rules.hms("14:35:55:??"));
   eq("",Rules.hms("29:20:43"));eq("",Rules.hms("1.4:34:03"));eq("",Rules.hms("15:1 6:47:40"));
+  eq("14:35:55",Rules.hms("14:35:55850"));
+  eq("14:35:55",Rules.hms("14.35.55:???"));
+  eq(Rules.Noble.YES,Rules.nobleEvidence("Sechta","ORSechta"));
+  eq(Rules.Noble.MAYBE,Rules.nobleEvidence("Sechta","Beranidlo"));
+  eq(Rules.Noble.MAYBE,Rules.nobleEvidence("nešlechta","nešlechta"));
+  eq(Rules.Noble.MAYBE,Rules.nobleEvidence("👑","👑"));
   LocalDate date=LocalDate.of(2026,9,10);ZoneId zone=ZoneId.of("Europe/Prague");
   eq(Instant.parse("2026-09-11T12:35:55Z"),Rules.arrival("zítra v 14:35:55:880",date,zone).instant);
   eq(Instant.parse("2026-09-10T12:35:55Z"),Rules.arrival("dnes v 14:35:55",date,zone).instant);
