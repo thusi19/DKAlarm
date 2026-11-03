@@ -138,13 +138,14 @@ class ScreenCaptureService:Service() {
         if(finished||generation!=readerGeneration)return
         val image=runCatching {r.acquireLatestImage()}.getOrNull() ?: return
         try {
+            val capturedAt=Instant.now()
             val crop=image.cropRect;val plane=image.planes[0]
             val pixels=RgbaFrame.argb(plane.buffer,plane.rowStride,plane.pixelStride,crop.left,crop.top,crop.width(),crop.height())
             if(pixels.none {((it shr 16) and 255)>24 || ((it shr 8) and 255)>24 || (it and 255)>24}) {
                 fail("Snímek je černý. Zvolená aplikace nemusí zachycení povolovat.");return
             }
             val bitmap=Bitmap.createBitmap(pixels,crop.width(),crop.height(),Bitmap.Config.ARGB_8888)
-            save(bitmap)
+            save(bitmap,capturedAt)
         } catch(e:Exception){fail(e.message ?: "Snímek nelze přečíst.")}
         finally {image.close()}
     }
@@ -159,7 +160,7 @@ class ScreenCaptureService:Service() {
             previous?.close()
         } catch(e:Exception){fail(e.message ?: "Změna rozlišení snímku selhala.")}
     }
-    private fun save(bitmap:Bitmap) {
+    private fun save(bitmap:Bitmap,capturedAt:Instant) {
         var temporary:File?=null
         try {
             val id=UUID.randomUUID().toString()
@@ -167,7 +168,7 @@ class ScreenCaptureService:Service() {
             temporary=File(file.parentFile,"$id.tmp")
             temporary.outputStream().use {check(bitmap.compress(Bitmap.CompressFormat.PNG,100,it))}
             check(temporary.renameTo(file)){"Snímek se nepodařilo uložit."}
-            CaptureStore.complete(this,CaptureStore.Shot(id,file,bitmap.width,bitmap.height,Instant.now()))
+            CaptureStore.complete(this,CaptureStore.Shot(id,file,bitmap.width,bitmap.height,capturedAt))
             resultNotification("Snímek připraven – otevřít analýzu","${bitmap.width} × ${bitmap.height} • originál bez zmenšení")
             finishCapture()
         } catch(e:Exception){temporary?.delete();fail(e.message ?: "Uložení snímku selhalo.")}

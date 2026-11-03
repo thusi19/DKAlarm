@@ -49,6 +49,10 @@ jobs:
           - name: screen-capture
             count: 2
             filter: com.dkalarm.app.capture.ScreenCaptureTest
+          - name: screen-capture-android16
+            api: 36
+            count: 2
+            filter: com.dkalarm.app.capture.ScreenCaptureTest
           - name: old-positive
             count: 2
             filter: com.dkalarm.app.ScreenshotAcceptanceTest#portraitPositiveTwelveNobles,com.dkalarm.app.ScreenshotAcceptanceTest#zoomedPositiveFourNobles
@@ -78,7 +82,7 @@ jobs:
           DK_TEST_FILTER: ${{ matrix.filter }}
           DK_EXPECTED_TESTS: ${{ matrix.count }}
         with:
-          api-level: 35
+          api-level: ${{ matrix.api || 35 }}
           arch: x86_64
           profile: pixel_2
           disable-animations: true

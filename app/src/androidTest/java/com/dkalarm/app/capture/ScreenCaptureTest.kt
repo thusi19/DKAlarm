@@ -68,7 +68,12 @@ class ScreenCaptureTest {
                 android.util.Log.i("DK_CAPTURE","Captured ${pixels.width}x${pixels.height}; rows=${rows.size}; nobles=${rows.count {it.isNoble}}")
                 assertTrue(rows.size>=10)
                 assertEquals("Known text on a real screen capture",3,rows.count {it.isNoble})
-                assertTrue(rows.filter {it.isNoble}.all {it.coordinates=="555|417"})
+                val nobles=rows.filter {it.isNoble}
+                assertTrue(nobles.all {it.coordinates=="555|417"})
+                assertTrue(nobles.all {it.attackColor==com.dkalarm.app.core.Rules.Color.GREEN})
+                assertEquals(listOf("11:59:31","11:59:31","11:59:32"),nobles.map {
+                    it.arrivalTime?.atZone(com.dkalarm.app.model.GAME_ZONE)?.toLocalTime()?.toString()
+                })
             } finally {pixels.recycle()}
         }
         device.pressBack()
