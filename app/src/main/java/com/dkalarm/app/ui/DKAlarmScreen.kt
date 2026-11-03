@@ -22,16 +22,18 @@ import java.time.format.DateTimeFormatter
 import java.time.format.ResolverStyle
 
 @Composable
-fun DKAlarmScreen(vm:DKAlarmViewModel,onPick:()->Unit,onExact:()->Unit,onNotifications:()->Unit,onNotificationSettings:()->Unit) {
+fun DKAlarmScreen(vm:DKAlarmViewModel,onPick:()->Unit,onScan:()->Unit,onExport:()->Unit,onExact:()->Unit,onNotifications:()->Unit,onNotificationSettings:()->Unit) {
     var tab by remember {mutableStateOf(0)}
     var confirmClear by remember {mutableStateOf(false)}
+    var showImage by remember {mutableStateOf(false)}
+    var showScanHelp by remember {mutableStateOf(false)}
     val preview=vm.plannedPreview()
     val enabled=vm.scheduler.enabledIdentities(vm.stored)
     LazyColumn(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal=16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
             Text("DK Alarm",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
-            Text("Útoky ze screenshotu • alarm 1 minutu před dopadem",style=MaterialTheme.typography.bodyMedium)
+            Text("Screenshot nebo sken obrazovky • alarm minutu před dopadem",style=MaterialTheme.typography.bodyMedium)
             Text("Časy hry: Praha",style=MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 FilterChip(tab==0,{tab=0},{Text("Import")})
@@ -60,6 +62,12 @@ fun DKAlarmScreen(vm:DKAlarmViewModel,onPick:()->Unit,onExact:()->Unit,onNotific
                 val date=runCatching {LocalDate.parse(dateText)}.getOrNull()
                 if(date!=null&&date!=vm.screenshotDate)OutlinedButton({vm.setDate(date)},enabled=!vm.busy){Text("Použít datum a přepočítat")}
                 Button(onPick,enabled=!vm.busy&&date==vm.screenshotDate,modifier=Modifier.fillMaxWidth()){Text("Vybrat screenshot")}
+                OutlinedButton({showScanHelp=true},enabled=!vm.busy,modifier=Modifier.fillMaxWidth()){Text("Skenovat obrazovku")}
+                if(vm.captureAvailable)TextButton({vm.openLatestCapture()},enabled=!vm.busy){Text("Otevřít poslední sken")}
+                if(vm.bitmap!=null) {
+                    Text(vm.qualityMessage,style=MaterialTheme.typography.bodySmall)
+                    TextButton({showImage=true}){Text("Zvětšit / uložit původní snímek")}
+                }
                 if(vm.busy){LinearProgressIndicator(Modifier.fillMaxWidth());Text(vm.progress)}
             }
             if(vm.attacks.isNotEmpty())item {
@@ -97,6 +105,11 @@ fun DKAlarmScreen(vm:DKAlarmViewModel,onPick:()->Unit,onExact:()->Unit,onNotific
         }
         item {Spacer(Modifier.height(24.dp))}
     }
+    if(showImage)vm.bitmap?.let {ImagePreview(it,onExport,{showImage=false})}
+    if(showScanHelp)AlertDialog(onDismissRequest={showScanHelp=false},title={Text("Sken obrazovky")},
+        text={Text("1. Povol snímání v dialogu Androidu. Můžeš vybrat jen prohlížeč.\n2. Otevři přehled útoků a v oznámení DK Alarmu klepni na Sejmout.\n3. Za 2 sekundy se pořídí jeden snímek. Otevři oznámení s výsledkem pro analýzu.\n\nZahrň Povel, Cíl a Příchod. Pro čitelný text přibliž stránku před snímáním.")},
+        confirmButton={TextButton({showScanHelp=false;onScan()}){Text("Povolit snímání")}},
+        dismissButton={TextButton({showScanHelp=false}){Text("Zpět")}})
     if(confirmClear)AlertDialog(onDismissRequest={confirmClear=false},title={Text("Zrušit všechny alarmy?")},
         text={Text("Odstraní se i uložené minutové série.")},confirmButton={TextButton({vm.clearAll();confirmClear=false}){Text("Zrušit alarmy")}},
         dismissButton={TextButton({confirmClear=false}){Text("Zpět")}})
@@ -170,3 +183,4 @@ private fun ReviewCard(a:Attack,enabled:Boolean,vm:DKAlarmViewModel) {
         }
     }
 }
+

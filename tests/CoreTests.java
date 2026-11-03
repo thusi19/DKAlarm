@@ -21,6 +21,15 @@ public class CoreTests {
   eq("14:35:55",Rules.hms("14:3555:850"));
   eq("15:20:43",Rules.hms("15:2043.758"));
   eq("",Rules.hms("29:3555"));
+  java.nio.ByteBuffer rgba=java.nio.ByteBuffer.allocate(28);
+  rgba.put(0,(byte)255);rgba.put(3,(byte)255); // Red pixel; 8 padding bytes after each two-pixel row.
+  rgba.put(5,(byte)255);rgba.put(7,(byte)255); // Green.
+  rgba.put(18,(byte)255);rgba.put(19,(byte)255); // Blue in row 2.
+  rgba.put(20,(byte)255);rgba.put(21,(byte)255);rgba.put(22,(byte)255);rgba.put(23,(byte)255);
+  int[] frame=RgbaFrame.argb(rgba,16,4,0,0,2,2);
+  eq(0xffff0000,frame[0]);eq(0xff00ff00,frame[1]);eq(0xff0000ff,frame[2]);eq(0xffffffff,frame[3]);
+  eq(0xff00ff00,RgbaFrame.argb(rgba,16,4,1,0,1,1)[0]);
+  boolean invalid=false;try {RgbaFrame.argb(rgba,16,4,0,0,3,3);}catch(IllegalArgumentException e){invalid=true;}eq(true,invalid);
   LocalDate date=LocalDate.of(2026,9,10);ZoneId zone=ZoneId.of("Europe/Prague");
   eq(Instant.parse("2026-09-11T12:35:55Z"),Rules.arrival("zítra v 14:35:55:880",date,zone).instant);
   eq(Instant.parse("2026-09-10T12:35:55Z"),Rules.arrival("dnes v 14:35:55",date,zone).instant);
@@ -55,3 +64,4 @@ public class CoreTests {
  }
  static TableParser.Word w(String text,int l,int r){return new TableParser.Word(text,l,5,r,15,.99f);}
 }
+

@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
@@ -38,6 +39,13 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".capture.CaptureTriggerActivity"
+            android:exported="false" android:excludeFromRecents="true"
+            android:noHistory="true" android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <service android:name=".capture.ScreenCaptureService"
+            android:exported="false" android:foregroundServiceType="mediaProjection" />
+
         <receiver
             android:name=".alarm.AlarmReceiver"
             android:exported="false" />
@@ -61,3 +69,4 @@
             android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>
+

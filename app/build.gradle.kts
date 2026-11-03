@@ -13,8 +13,8 @@ android {
         applicationId = "com.dkalarm.text"
         minSdk = 26
         targetSdk = 36
-        versionCode = 31
-        versionName = "0.3.1-text"
+        versionCode = 40
+        versionName = "0.4.0-screen"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -55,4 +55,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }
+

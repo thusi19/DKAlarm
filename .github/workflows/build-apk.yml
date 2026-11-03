@@ -44,6 +44,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: screen-capture
+            count: 2
+            filter: com.dkalarm.app.capture.ScreenCaptureTest
           - name: old-positive
             count: 2
             filter: com.dkalarm.app.ScreenshotAcceptanceTest#portraitPositiveTwelveNobles,com.dkalarm.app.ScreenshotAcceptanceTest#zoomedPositiveFourNobles
@@ -83,3 +86,4 @@ jobs:
         with:
           name: android-test-results-${{ matrix.name }}
           path: reports
+

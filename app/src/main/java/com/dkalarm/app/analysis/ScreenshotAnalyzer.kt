@@ -108,6 +108,7 @@ class ScreenshotAnalyzer {
                     val color = detectFlag(bitmap,g,band,row)
                     val warning = buildList {
                         if(row.warning.isNotBlank()) add(row.warning.trim())
+                        if(band.bottom-band.top<24) add("Drobný text: ověř jednotku, cíl a čas, nebo pořiď přiblížený snímek.")
                         if(color==Rules.Color.UNKNOWN) add("Barva NEJISTÁ / ZKONTROLOVAT.")
                     }.joinToString(" ")
                     result += Attack("$hash-${band.top}",row.villageName,row.coordinates,row.arrival,
@@ -180,3 +181,4 @@ class ScreenshotAnalyzer {
         }
     }
 }
+
