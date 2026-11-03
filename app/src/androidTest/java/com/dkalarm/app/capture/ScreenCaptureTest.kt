@@ -14,6 +14,7 @@ import com.dkalarm.app.analysis.ScreenshotAnalyzer
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.After
 import java.io.File
 import java.util.regex.Pattern
 
@@ -27,6 +28,10 @@ class ScreenCaptureTest {
         while(SystemClock.elapsedRealtime()<end){if(condition())return;SystemClock.sleep(100)}
         device.dumpWindowHierarchy(File(context.cacheDir,"capture-test-ui.xml"))
         error(message)
+    }
+    @After fun diagnostics() {
+        runCatching {device.dumpWindowHierarchy(File(context.cacheDir,"capture-test-ui.xml"))}
+        CaptureStore.latest(context)?.file?.let {file -> runCatching {file.copyTo(File(context.cacheDir,"capture-test-frame.png"),true)}}
     }
     private fun consent() {
         val mode=device.wait(Until.findObject(By.res(Pattern.compile("com.android.systemui:id/screen_share_mode_(spinner|options)"))),7_000)
@@ -60,6 +65,9 @@ class ScreenCaptureTest {
             waitFor("No captured PNG was delivered",30_000){CaptureStore.latest(context)?.id?.let {it!=before}==true}
             val shot=CaptureStore.latest(context)!!
             assertEquals(nativeWidth,shot.width);assertEquals(nativeHeight,shot.height)
+            waitFor("Projection notification must be removed") {
+                context.getSystemService(android.app.NotificationManager::class.java).activeNotifications.none {it.id==ScreenCaptureService.NOTIFICATION_ID}
+            }
             assertFalse("Projection must stop after one shot",CaptureStore.isActive(context))
             val pixels=BitmapFactory.decodeFile(shot.file.absolutePath)
             try {
@@ -77,6 +85,7 @@ class ScreenCaptureTest {
             } finally {pixels.recycle()}
         }
         device.pressBack()
+        Unit
     }
     @Test fun cancelledPermissionDoesNotCapture() {
         shell("pm grant ${context.packageName} android.permission.POST_NOTIFICATIONS")

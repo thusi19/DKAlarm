@@ -8,6 +8,8 @@ set +e
 adb shell am instrument -w -r -e class "$DK_TEST_FILTER" com.dkalarm.text.test/androidx.test.runner.AndroidJUnitRunner > reports/instrumentation.txt 2>&1
 instrument_status=$?
 cat reports/instrumentation.txt
+adb exec-out run-as com.dkalarm.text cat cache/capture-test-ui.xml > reports/capture-ui.xml 2>/dev/null
+adb exec-out run-as com.dkalarm.text cat cache/capture-test-frame.png > reports/captured-frame.png 2>/dev/null
 adb logcat -d -s DK_OCR:I DK_WORD:I DK_CAPTURE:D AndroidRuntime:E > reports/ocr-logcat.txt
 adb shell am start -n com.dkalarm.text/com.dkalarm.app.MainActivity
 sleep 3

@@ -189,9 +189,9 @@ class ScreenCaptureService:Service() {
     private fun finishCapture() {
         if(finished)return
         finished=true;CaptureStore.setActive(this,false);handler.removeCallbacksAndMessages(null)
-        display?.release();display=null
-        reader?.close();reader=null
-        projection?.stop();projection=null
+        runCatching {display?.release()};display=null
+        runCatching {reader?.close()};reader=null
+        runCatching {projection?.stop()};projection=null
         stopForeground(STOP_FOREGROUND_REMOVE);stopSelf()
     }
     override fun onDestroy() {
